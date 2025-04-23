@@ -153,7 +153,7 @@ class ClientHandler implements Runnable {
             outToClient.writeBytes("Result: " + result + "\n");
         } catch (Exception e) {
             try {
-                outToClient.writeBytes("ERROR:" + e.getMessage() + "\n");
+                outToClient.writeBytes("Error:" + e.getMessage() + "\n");
             } catch (IOException ioe) {
                 System.out.println("Error sending calculation error to client: " + ioe.getMessage());
             }
