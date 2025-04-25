@@ -143,17 +143,16 @@ class ClientHandler implements Runnable {
 
     private void handleCalculation(String calculation) {
         try {
-            //Log the calculation request
+            // Log the calculation request
             logger.logActivity(client, "Calculation: " + calculation);
-
-            //Pasre and calculate
+            // Parse and calculate
             String result = evaluateMathExpression(calculation);
-
-            //Send result bcak to client
+            // Send result back to client
             outToClient.writeBytes("Result: " + result + "\n");
+            logger.logActivity(client, "Answer from Server: " + result);
         } catch (Exception e) {
             try {
-                outToClient.writeBytes("Error:" + e.getMessage() + "\n");
+                outToClient.writeBytes("Error: " + e.getMessage() + "\n");
             } catch (IOException ioe) {
                 System.out.println("Error sending calculation error to client: " + ioe.getMessage());
             }
@@ -162,27 +161,81 @@ class ClientHandler implements Runnable {
 
     private String evaluateMathExpression(String expression) {
         try {
-            //Basic expression parser for arithmetic
             expression = expression.replaceAll("\\s+", "");
-
-            //Check for basic operations
-            if (expression.contains("+")) {
-                String[] parts = expression.split("\\+");
-                return String.valueOf(Double.parseDouble(parts[0]) + Double.parseDouble(parts[1]));
-            } else if (expression.contains("-")) {
-                String[] parts = expression.split("-");
-                return String.valueOf(Double.parseDouble(parts[0]) - Double.parseDouble(parts[1]));
-            } else if (expression.contains("*")) {
-                String[] parts = expression.split("\\*");
-                return String.valueOf(Double.parseDouble(parts[0]) * Double.parseDouble(parts[1]));
-            } else if (expression.contains("/")) {
-                String[] parts = expression.split("/");
-                if (Double.parseDouble(parts[1]) == 0) {
-                    return "Error: Division by zero";
+            double result = 0;
+            double currentNumber = 0;
+            int i = 0;
+            // Initial parsing of the first number
+            StringBuilder numBuilder = new StringBuilder();
+            // Handle negative first number
+            if (i < expression.length() && expression.charAt(i) == '-') {
+                numBuilder.append('-');
+                i++;
+            }
+            // Parse first number
+            while (i < expression.length() && Character.isDigit(expression.charAt(i)) || 
+                  (i < expression.length() && expression.charAt(i) == '.')) {
+                numBuilder.append(expression.charAt(i));
+                i++;
+            }
+            // Set initial value
+            if (numBuilder.length() > 0) {
+                result = Double.parseDouble(numBuilder.toString());
+            }
+            //Process the rest of the expression
+            while (i < expression.length()) {
+                char op = expression.charAt(i);
+                i++;
+                
+                //Parse the next number
+                numBuilder = new StringBuilder();
+                //Handle negative numbers after operators
+                if (i < expression.length() && expression.charAt(i) == '-') {
+                    numBuilder.append('-');
+                    i++;
                 }
-                return String.valueOf(Double.parseDouble(parts[0]) / Double.parseDouble(parts[1]));
+                while (i < expression.length() && (Character.isDigit(expression.charAt(i)) || 
+                      expression.charAt(i) == '.')) {
+                    numBuilder.append(expression.charAt(i));
+                    i++;
+                }
+                if (numBuilder.length() > 0) {
+                    currentNumber = Double.parseDouble(numBuilder.toString());
+                } else {
+                    return "Error: Invalid expression format";
+                }
+                // Pefrorm operation
+                switch (op) {
+                    case '+':
+                        result += currentNumber;
+                        break;
+                    case '-':
+                        result -= currentNumber;
+                        break;
+                    case '*':
+                        result *= currentNumber;
+                        break;
+                    case '/':
+                        if (currentNumber == 0) {
+                            return "Error: Division by zero";
+                        }
+                        result /= currentNumber;
+                        break;
+                    case '%':
+                        if (currentNumber == 0) {
+                            return "Error: Modulo by zero";
+                        }
+                        result %= currentNumber;
+                        break;
+                    default:
+                        return "Error: Unsupported operation: " + op;
+                }
+            }
+            //Check if result is an integer
+            if (result == (int) result) {
+                return String.valueOf((int) result);
             } else {
-                return "Error: Unsupported operation";
+                return String.valueOf(result);
             }
         } catch (Exception e) {
             return "Error: Invalid expression";
