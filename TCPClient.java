@@ -79,12 +79,37 @@ public class TCPClient {
         }
     }
 
-    // validates if an expression has 2 or more valid arithmetic operators
+    // validate equation format is in infix notation 
     private static boolean isValidExpression(String expr) {
-        int operatorCount = 0;
-        for (char c : expr.toCharArray()) {
-            if ("+-*/%".indexOf(c) >= 0) operatorCount++;
+        expr = expr.replaceAll("\\s+", ""); 
+
+        if (expr.isEmpty()) {
+            return false;
         }
+
+        int operatorCount = 0;
+        boolean expectNumber = true; 
+
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+
+            if (Character.isDigit(c) || c == '.') {
+                expectNumber = false; 
+            } else if ("+-*/%".indexOf(c) >= 0) {
+                if (expectNumber && !(c == '-' && i == 0)) {
+                    return false;
+                }
+                operatorCount++;
+                expectNumber = true; 
+            } else {
+                return false; 
+            }
+        }
+
+        if (expectNumber) {
+            return false;
+        }
+
         return operatorCount >= 2;
     }
 }
