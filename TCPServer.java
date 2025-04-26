@@ -159,7 +159,7 @@ class ClientHandler implements Runnable {
                         break; //Client disconnected
                     }
 
-                    if (clientMessage.equalsIgnoreCase("CLOSE")) {
+                    if (clientMessage.startsWith("CLOSE")) {
                         logger.logActivity(client, "Requested disconnection");
                         logger.removeClient(client);  // remove client on request 
                         break; // Close client connection cleanly
@@ -181,11 +181,19 @@ class ClientHandler implements Runnable {
         } finally {
             //close connections
             try{
-        //close server side too
-                if(inFromClient!=null) inFromClient.close();
-                if(outToClient!=null) outToClient.close();
-                if(clientSocket != null && !clientSocket.isClosed()) clientSocket.close();
-                if(client != null) logger.logActivity(client,"Disconnected.");
+            //close server side too
+                if(inFromClient!=null){
+                    inFromClient.close();
+                }
+                if(outToClient!=null){
+                    outToClient.close();
+                }
+                if(clientSocket != null && !clientSocket.isClosed()) {
+                    clientSocket.close();
+                }
+                if(client != null) {
+                    logger.logActivity(client,"Disconnected.");
+                }
                 
             } catch (IOException e) {
                 System.out.println("Error closing connection: " + e.getMessage());
@@ -285,7 +293,7 @@ class ClientHandler implements Runnable {
             return String.valueOf(result);
         }
     }
-
+}
 public class TCPServer {
     private static final int PORT = 6789;
     private static ClientLogger logger = new ClientLogger();
@@ -364,4 +372,4 @@ public class TCPServer {
         monitor.start();
     }
 }
-}
+
