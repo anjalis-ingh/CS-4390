@@ -99,19 +99,41 @@ class ClientLogger {
     }
 }
 
+class RequestPriority {
+    private List<Runnable> queue = new ArrayList<>();
+    private final Object lock = new Object();
+
+    public void addRequst(Runnable request) {
+        synchronized (lock) {
+            queue.add(request);
+        }
+    }
+
+    public void processNext() {
+        synchronized (lock) {
+            if (!queue.isEmpty()) {
+                Runnable next = queue.remove(0);
+                next.run();
+            }
+        }
+    }
+}
+
 class ClientHandler implements Runnable {
     private Socket clientSocket;
     private BufferedReader inFromClient;
     private DataOutputStream outToClient;
     private Client client;
     private ClientLogger logger;
+    private RequestPriority requestOrderQueue;
 
-    public ClientHandler(Socket socket, ClientLogger logger) {
+    public ClientHandler(Socket socket, ClientLogger logger, RequestPriority queue) {
         try {
             this.clientSocket = socket;
             this.inFromClient = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             this.outToClient = new DataOutputStream(clientSocket.getOutputStream());
             this.logger = logger;
+            this.requestOrderQueue = queue;
         } catch (IOException e) {
             System.out.println("Error initializing client handler: " + e.getMessage());
         }
@@ -145,16 +167,30 @@ class ClientHandler implements Runnable {
 
                     //Handle math calculation
                     if (clientMessage.startsWith("CALC:")) {
-                        handleCalculation(clientMessage.substring(5));
+                        this.requestOrderQueue.addRequst(() -> handleCalculation(clientMessage.substring(5)));
                     } else {
                         outToClient.writeBytes("Error: Invalid command\n");
                     }
+
                 }
             } else {
                 outToClient.writeBytes("Error: Invalid join format. Use JOIN:username\n");
             }
         } catch (IOException e) {
             System.out.println("Client handler error: " + e.getMessage());
+        } finally {
+            //close connections
+            try{
+        //close server side too
+                if(inFromClient!=null) inFromClient.close();
+                if(outToClient!=null) outToClient.close();
+                if(clientSocket != null && !clientSocket.isClosed()) clientSocket.close();
+                if(client != null) logger.logActivity(client,"Disconnected.");
+                
+            } catch (IOException e) {
+                System.out.println("Error closing connection: " + e.getMessage());
+            }
+            
         }
     }
 
@@ -169,7 +205,7 @@ class ClientHandler implements Runnable {
             logger.logActivity(client, "Answer from Server: " + result);
         } catch (Exception e) {
             try {
-                outToClient.writeBytes("Error: " + e.getMessage() + "\n");
+                outToClient.writeBytes("Error: " + e.getMessage() + " or contains negative value\n");
             } catch (IOException ioe) {
                 System.out.println("Error sending calculation error to client: " + ioe.getMessage());
             }
@@ -177,93 +213,84 @@ class ClientHandler implements Runnable {
     }
 
     private String evaluateMathExpression(String expression) {
-        try {
-            expression = expression.replaceAll("\\s+", "");
-            double result = 0;
-            double currentNumber = 0;
-            int i = 0;
-            // Initial parsing of the first number
-            StringBuilder numBuilder = new StringBuilder();
-            // Handle negative first number
-            if (i < expression.length() && expression.charAt(i) == '-') {
-                numBuilder.append('-');
+        
+        expression = expression.replaceAll("\\s+", "");
+        List<Double> nums = new ArrayList<>();
+        List<Character> ops = new ArrayList<>();
+
+
+        // Initial parsing of the first number
+        StringBuilder numBuilder = new StringBuilder();
+
+    
+        for(int i =0; i<expression.length();i++){
+            char ch = expression.charAt(i);
+            if(Character.isDigit(ch)|| ch=='.'){
+                numBuilder.append(ch);
+            }else{
+                nums.add(Double.parseDouble(numBuilder.toString()));
+                numBuilder.setLength(0);
+                ops.add(ch);
+            }
+        }
+        nums.add(Double.parseDouble(numBuilder.toString()));
+
+        //handling *,/, and %
+        for(int i =0; i < ops.size();){
+            char op = ops.get(i);
+            if(op == '*'||op=='/'||op =='%'){
+                double x =nums.get(i);
+                double y =nums.get(i+1);
+                double result = 0;
+
+                if(op == '*'){
+                    result = x*y;
+                } else if (op == '/'){
+                    if(y==0){
+                        return "Error: Dividing by 0";
+                    }
+
+                    result = x/y;
+                }else if(op == '%'){
+                    if(y==0){
+                        return "Error: Modulo by 0";
+                    }
+
+                    result = x % y;
+                }
+
+                nums.set(i,result);
+                nums.remove(i+1);
+                ops.remove(i);
+            } else{
                 i++;
             }
-            // Parse first number
-            while (i < expression.length() && Character.isDigit(expression.charAt(i)) || 
-                  (i < expression.length() && expression.charAt(i) == '.')) {
-                numBuilder.append(expression.charAt(i));
-                i++;
+        }
+
+        //handling +, -
+        double result = nums.get(0);
+        for(int i =0; i < ops.size(); i++){
+            char op =ops.get(i);
+            double y = nums.get(i+1);
+            if(op=='+'){
+                result+=y;
+            }else{
+                result -=y;    
             }
-            // Set initial value
-            if (numBuilder.length() > 0) {
-                result = Double.parseDouble(numBuilder.toString());
-            }
-            //Process the rest of the expression
-            while (i < expression.length()) {
-                char op = expression.charAt(i);
-                i++;
-                
-                //Parse the next number
-                numBuilder = new StringBuilder();
-                //Handle negative numbers after operators
-                if (i < expression.length() && expression.charAt(i) == '-') {
-                    numBuilder.append('-');
-                    i++;
-                }
-                while (i < expression.length() && (Character.isDigit(expression.charAt(i)) || 
-                      expression.charAt(i) == '.')) {
-                    numBuilder.append(expression.charAt(i));
-                    i++;
-                }
-                if (numBuilder.length() > 0) {
-                    currentNumber = Double.parseDouble(numBuilder.toString());
-                } else {
-                    return "Error: Invalid expression format";
-                }
-                // Pefrorm operation
-                switch (op) {
-                    case '+':
-                        result += currentNumber;
-                        break;
-                    case '-':
-                        result -= currentNumber;
-                        break;
-                    case '*':
-                        result *= currentNumber;
-                        break;
-                    case '/':
-                        if (currentNumber == 0) {
-                            return "Error: Division by zero";
-                        }
-                        result /= currentNumber;
-                        break;
-                    case '%':
-                        if (currentNumber == 0) {
-                            return "Error: Modulo by zero";
-                        }
-                        result %= currentNumber;
-                        break;
-                    default:
-                        return "Error: Unsupported operation: " + op;
-                }
-            }
-            //Check if result is an integer
-            if (result == (int) result) {
-                return String.valueOf((int) result);
-            } else {
-                return String.valueOf(result);
-            }
-        } catch (Exception e) {
-            return "Error: Invalid expression";
+        }
+
+        if(result == (int)result){
+            return String.valueOf((int) result);
+        } else{
+            return String.valueOf(result);
         }
     }
-}
 
 public class TCPServer {
     private static final int PORT = 6789;
     private static ClientLogger logger = new ClientLogger();
     private static ExecutorService threadPool = Executors.newCachedThreadPool();
+    private static RequestPriority queue = new RequestPriority();
 
     public static void main(String[] argv) throws Exception {
         ServerSocket welcomeSocket = new ServerSocket(PORT);
@@ -273,15 +300,28 @@ public class TCPServer {
         //Start server monitor thread
         startServerMonitor();
 
+        // Start request calculation monitoring
+        startCalculationMonitoring(queue);
+
         //Accept client connections
         while (true) {
             Socket connectionSocket = welcomeSocket.accept();
             System.out.println("New client connected: " + connectionSocket.getInetAddress().getHostAddress());
 
             //Create a new thread for each client
-            ClientHandler clientHandler = new ClientHandler(connectionSocket, logger);
+            ClientHandler clientHandler = new ClientHandler(connectionSocket, logger, queue);
             threadPool.execute(clientHandler);
         }
+    }
+
+    private static void startCalculationMonitoring(RequestPriority requestPriority) {
+        Thread monitor = new Thread(() -> {
+            while (true) {
+                requestPriority.processNext();
+            }
+        });
+        monitor.setDaemon(true);
+        monitor.start();
     }
 
     private static void startServerMonitor() {
@@ -323,4 +363,5 @@ public class TCPServer {
         monitor.setDaemon(true);
         monitor.start();
     }
+}
 }
