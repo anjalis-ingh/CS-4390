@@ -70,6 +70,16 @@ class ClientLogger {
         }
     }
 
+    public void removeClient(Client client) {
+        synchronized (lock) {
+            clients.remove(client);
+            String logEntry = String.format("[%s] Disconnection: %s (%s)",
+                    getCurrentTime(), client.getUsername(), client.getAddress());
+            activityLog.add(logEntry);
+            System.out.println(logEntry);
+        }
+    }
+
     private String getCurrentTime() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         return LocalDateTime.now().format(formatter);
@@ -123,7 +133,14 @@ class ClientHandler implements Runnable {
                 while (true) {
                     String clientMessage = inFromClient.readLine();
                     if (clientMessage == null) {
+                        logger.removeClient(client);
                         break; //Client disconnected
+                    }
+
+                    if (clientMessage.equalsIgnoreCase("CLOSE")) {
+                        logger.logActivity(client, "Requested disconnection");
+                        logger.removeClient(client);  // remove client on request 
+                        break; // Close client connection cleanly
                     }
 
                     //Handle math calculation

@@ -46,7 +46,10 @@ public class TCPClient {
                 String input = scanner.nextLine().trim();
 
                 if (input.equalsIgnoreCase("CLOSE")) {
-                    clientSocket.close();
+                    // send close command
+                    outToServer.writeBytes("CLOSE\n"); 
+                    // close socket 
+                    clientSocket.close();              
                     System.out.println("Connection closed.");
                     break;
                 }
