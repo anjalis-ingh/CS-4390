@@ -45,14 +45,36 @@ public class TCPClient {
                 System.out.print("Type 'CLOSE' to disconnect or enter another expression: ");
                 String input = scanner.nextLine().trim();
 
-                if (input.equalsIgnoreCase("CLOSE")) {
-                    // send close command
-                    outToServer.writeBytes("CLOSE\n"); 
-                    // close socket 
-                    clientSocket.close();              
-                    System.out.println("Connection closed.");
-                    break;
+            if (input.equalsIgnoreCase("CLOSE")) {
+                System.out.println("Requesting disconnection...");
+                outToServer.writeBytes("CLOSE\n");
+
+                // 2 second timeout 
+                clientSocket.setSoTimeout(2000); 
+
+                try {
+                    String serverReply = inFromServer.readLine();
+                    if (serverReply == null || !serverReply.trim().equalsIgnoreCase("Connection closed")) {
+                        System.out.println("No proper confirmation from server. Closing client socket manually.");
+                        if (!clientSocket.isClosed()) {
+                            clientSocket.close();
+                        }
+                    }
+                } catch (SocketTimeoutException e) {
+                    System.out.println("Server did not respond. Closing client socket manually.");
+                    if (!clientSocket.isClosed()) {
+                        clientSocket.close();
+                    }
                 }
+
+                // final safety check
+                if (!clientSocket.isClosed()) {
+                    clientSocket.close();
+                }
+
+                System.out.println("Connection closed.");
+                break;
+            }
 
                 if (!isValidExpression(input)) {
                     System.out.println("Expression must contain at least two arithmetic operators (+ - * / %). Try again.");

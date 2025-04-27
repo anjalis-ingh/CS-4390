@@ -162,7 +162,8 @@ class ClientHandler implements Runnable {
                     if (clientMessage.startsWith("CLOSE")) {
                         logger.logActivity(client, "Requested disconnection");
                         logger.removeClient(client);  // remove client on request 
-                        break; // Close client connection cleanly
+                        outToClient.writeBytes("Connection closed\n"); // send final confirmation before closing
+                        break; // close client connection cleanly
                     }
 
                     //Handle math calculation
