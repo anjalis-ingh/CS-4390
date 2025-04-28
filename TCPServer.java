@@ -339,8 +339,7 @@ public class TCPServer {
             while (true) {
                 System.out.println("\nServer Commands:");
                 System.out.println("1. Show connected clients");
-                System.out.println("2. Exit server");
-                System.out.print("Enter command (1-2): ");
+                System.out.print("Enter command (1) to show connected clients: ");
 
                 try {
                     int command = scanner.nextInt();
@@ -349,7 +348,7 @@ public class TCPServer {
                             logger.printClients();
                             break;
                         case 2:
-                            System.out.println("Shutting down server...");
+                            System.out.println("2 is used to manually shut down server for testing...");
                             threadPool.shutdown();
                             scanner.close();
                             System.exit(0);
@@ -373,4 +372,3 @@ public class TCPServer {
         monitor.start();
     }
 }
-
